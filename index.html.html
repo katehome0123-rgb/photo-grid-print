@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>現場写真プリント</title>
+<style>
+  :root {
+    --bg: #f6f4ee;
+    --panel: #ffffff;
+    --panel2: #f1efe6;
+    --ink: #221f1a;
+    --ink2: #726c5f;
+    --line: #e2dccc;
+    --line2: #cfc8b4;
+    --accent: #2a6fbd;
+    --accent-ink: #ffffff;
+    --danger: #b3432f;
+    --danger-bg: #f8e9e5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a; --panel: #202226; --panel2: #26282b; --ink: #f0eee6;
+      --ink2: #a29c8e; --line: #34363a; --line2: #46484c; --accent: #6ba3ec;
+      --accent-ink: #0e1420; --danger: #e08770; --danger-bg: #3a2622;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic", sans-serif;
+  }
+  img { max-width: 100%; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+  .topbar h1 { font-size: 20px; margin: 0 0 4px; font-weight: 700; letter-spacing: .01em; }
+  .topbar .sub { margin: 0 0 20px; color: var(--ink2); font-size: 13px; line-height: 1.7; max-width: 720px; }
+  .layout { display: flex; gap: 20px; align-items: flex-start; }
+  @media (max-width: 860px) { .layout { flex-direction: column; } }
+
+  .panel {
+    flex: 0 0 300px; display: flex; flex-direction: column; gap: 14px;
+    position: sticky; top: 16px;
+  }
+  @media (max-width: 860px) { .panel { position: static; flex: 1 1 auto; width: 100%; } }
+
+  .block {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 14px 16px;
+  }
+  .block h2 { font-size: 12.5px; font-weight: 700; margin: 0 0 10px; color: var(--ink2); letter-spacing: .04em; }
+  .count { font-weight: 400; color: var(--ink2); }
+
+  .dropzone {
+    border: 1.5px dashed var(--line2); border-radius: 10px; padding: 20px 12px;
+    text-align: center; background: var(--panel2); transition: border-color .15s, background .15s;
+  }
+  .dropzone.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel2)); }
+  .dropzone p { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: var(--ink2); }
+  .dropzone .muted { color: var(--ink2); font-size: 11.5px; }
+  .dropbtns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+  .btn {
+    appearance: none; border: 1px solid var(--line2); background: var(--panel);
+    color: var(--ink); font: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.ghost { background: transparent; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn.primary:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.big { width: 100%; padding: 11px 14px; font-size: 14px; }
+  .btn.icon { padding: 4px 7px; font-size: 12px; line-height: 1; }
+
+  .seg { display: flex; border: 1px solid var(--line2); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+  .segbtn {
+    flex: 1; appearance: none; border: none; background: var(--panel); color: var(--ink);
+    font: inherit; font-size: 13px; font-weight: 600; padding: 8px 6px; cursor: pointer;
+    border-right: 1px solid var(--line2);
+  }
+  .segbtn:last-child { border-right: none; }
+  .segbtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .check { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink); margin-top: 2px; cursor: pointer; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+  .block.grow { flex: 1 1 auto; min-height: 0; }
+  .photolist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
+  .photo-row { display: flex; align-items: center; gap: 8px; padding: 5px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); }
+  .photo-row .num { font-size: 11px; color: var(--ink2); width: 18px; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
+  .photo-row .thumb { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; background: var(--line); flex: none; border: 1px solid var(--line2); }
+  .photo-row .thumb.broken { display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--danger); background: var(--danger-bg); text-align: center; }
+  .photo-row .nameWrap { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .photo-row .name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .photo-row .rotlabel { font-size: 10px; color: var(--accent); }
+  .photo-row .rowbtns { display: flex; gap: 3px; flex: none; }
+  .empty-msg { font-size: 12.5px; color: var(--ink2); padding: 14px 4px; text-align: center; line-height: 1.7; }
+
+  .summary { font-size: 12.5px; color: var(--ink2); margin-bottom: 10px; line-height: 1.6; }
+  .summary b { color: var(--ink); font-weight: 700; }
+  .status { font-size: 12px; margin: 8px 0 0; min-height: 16px; line-height: 1.6; }
+  .status.ok { color: #1f7a4d; }
+  .status.err { color: var(--danger); }
+
+  .preview { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  .sheet {
+    width: 100%; max-width: 480px; background: #fff; border: 1px solid var(--line2);
+    border-radius: 3px; box-shadow: 0 3px 14px rgba(30, 24, 10, .10);
+    padding: 5.5% 5%; display: grid; gap: 3%;
+  }
+  .sheet.p { aspect-ratio: 210 / 297; }
+  .sheet.l { aspect-ratio: 297 / 210; }
+  .sheet.g4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .sheet.g9 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+  .sheet-label { font-size: 11.5px; color: var(--ink2); }
+  .cell {
+    background: #f4f2ec; border: 1px solid #e6e1d2; border-radius: 3px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; position: relative; min-height: 0;
+  }
+  .cell img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .cell .cap {
+    position: absolute; left: 0; right: 0; bottom: 0; font-size: 8px; color: #6b6656;
+    background: rgba(255,255,255,.82); padding: 1px 3px; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cell.placeholder { color: #b9b29c; font-size: 10px; flex-direction: column; gap: 4px; }
+  .cell.placeholder svg { width: 26px; height: 26px; opacity: .6; }
+  .preview-empty-note {
+    font-size: 12.5px; color: var(--ink2); text-align: center; max-width: 440px; line-height: 1.7;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="topbar">
+    <h1>現場写真プリント</h1>
+    <p class="sub">フォルダやスマホから写真をまとめて追加すると、4分割・9分割のレイアウトに並べてPDFに書き出せます。写真はこの画面(お使いの端末・ブラウザ)の中だけで処理され、どこにもアップロードされません。</p>
+  </header>
+
+  <div class="layout">
+    <aside class="panel">
+      <section class="block">
+        <h2>写真を追加</h2>
+        <div class="dropzone" id="dropzone">
+          <p>ここに写真をドラッグ&ドロップ<br><span class="muted">フォルダごとドロップしてもOK</span></p>
+          <div class="dropbtns">
+            <button type="button" class="btn" id="btnPickFiles">写真を選ぶ</button>
+            <button type="button" class="btn ghost" id="btnPickFolder">フォルダを選ぶ</button>
+          </div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <input type="file" id="folderInput" webkitdirectory multiple hidden>
+      </section>
+
+      <section class="block">
+        <h2>レイアウト</h2>
+        <div class="seg" id="segGrid">
+          <button type="button" class="segbtn" data-v="4">4分割</button>
+          <button type="button" class="segbtn" data-v="9">9分割</button>
+        </div>
+        <div class="seg" id="segOri">
+          <button type="button" class="segbtn" data-v="p">縦(ポートレート)</button>
+          <button type="button" class="segbtn" data-v="l">横(ランドスケープ)</button>
+        </div>
+        <label class="check"><input type="checkbox" id="chkCaption"> ファイル名を写真の下に入れる</label>
+      </section>
+
+      <section class="block grow">
+        <h2>写真リスト <span class="count" id="photoCount"></span></h2>
+        <ol class="photolist" id="photoList"></ol>
+      </section>
+
+      <section class="block">
+        <div class="summary" id="summary"></div>
+        <button type="button" class="btn primary big" id="btnExport" disabled>PDFに書き出す</button>
+        <p class="status" id="exportStatus" role="status"></p>
+      </section>
+    </aside>
+
+    <main class="preview" id="preview"></main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(() => {
+  const state = { photos: [], grid: 4, ori: 'p', caption: false, exporting: false };
+  let seq = 0;
+
+  const $ = (sel) => document.querySelector(sel);
+  const dropzone = $('#dropzone');
+  const fileInput = $('#fileInput');
+  const folderInput = $('#folderInput');
+  const photoListEl = $('#photoList');
+  const photoCountEl = $('#photoCount');
+  const previewEl = $('#preview');
+  const summaryEl = $('#summary');
+  const btnExport = $('#btnExport');
+  const statusEl = $('#exportStatus');
+  const chkCaption = $('#chkCaption');
+
+  const isImageLike = (file) => /^image\//.test(file.type) || /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(file.name);
+
+  // ---- ファイル・フォルダの取り込み ----
+  async function entriesFromDataTransfer(dt) {
+    const items = dt.items;
+    if (!items || !items.length || !items[0].webkitGetAsEntry) return Array.from(dt.files || []);
+    const roots = [];
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
+      if (entry) roots.push(entry);
+    }
+    if (!roots.length) return Array.from(dt.files || []);
+    const files = [];
+    async function walk(entry) {
+      if (entry.isFile) {
+        await new Promise((resolve) => entry.file((f) => { files.push(f); resolve(); }, () => resolve()));
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        let batch;
+        do {
+          batch = await new Promise((resolve) => reader.readEntries(resolve, () => resolve([])));
+          for (const e of batch) await walk(e);
+        } while (batch.length);
+      }
+    }
+    for (const e of roots) await walk(e);
+    return files;
+  }
+
+  function addFiles(fileList) {
+    const files = Array.from(fileList).filter(isImageLike);
+    if (!files.length) return;
+    for (const file of files) {
+      const id = 'p' + (++seq);
+      const url = URL.createObjectURL(file);
+      const photo = { id, name: file.name, url, error: false, w: 0, h: 0, img: null, rotOverride: null, _prevCache: null };
+      state.photos.push(photo);
+      const img = new Image();
+      img.onload = () => { photo.w = img.naturalWidth; photo.h = img.naturalHeight; photo.img = img; renderAll(); };
+      img.onerror = () => { photo.error = true; renderAll(); };
+      img.src = url;
+    }
+    renderAll();
+  }
+
+  $('#btnPickFiles').addEventListener('click', () => fileInput.click());
+  $('#btnPickFolder').addEventListener('click', () => folderInput.click());
+  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+  folderInput.addEventListener('change', () => { addFiles(folderInput.files); folderInput.value = ''; });
+
+  ['dragenter', 'dragover'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation(); dropzone.classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('over');
+  }));
+  dropzone.addEventListener('drop', async (e) => {
+    const files = await entriesFromDataTransfer(e.dataTransfer);
+    addFiles(files);
+  });
+  // ページ全体へのドロップでファイルが開かれてしまわないようにする
+  ['dragover', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault()));
+
+  // ---- レイアウト操作 ----
+  function setSeg(container, value, key) {
+    container.querySelectorAll('.segbtn').forEach((b) => {
+      const on = b.dataset.v === value;
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    state[key] = value;
+    renderPreview();
+    updateSummary();
+  }
+  const segGrid = $('#segGrid'), segOri = $('#segOri');
+  segGrid.addEventListener('click', (e) => { const b = e.target.closest('.segbtn'); if (b) setSeg(segGrid, b.dataset.v === '9' ? '9' : '4', 'grid'); });
+  segOri.addEventListener('click', (e) => { const b = e.target.closest('.segbtn'); if (b) setSeg(segOri, b.dataset.v === 'l' ? 'l' : 'p', 'ori'); });
+  state.grid = 4; state.ori = 'p';
+  segGrid.querySelector('[data-v="4"]').setAttribute('aria-pressed', 'true');
+  segOri.querySelector('[data-v="p"]').setAttribute('aria-pressed', 'true');
+  chkCaption.addEventListener('change', () => { state.caption = chkCaption.checked; renderPreview(); });
+
+  // ---- 写真リスト ----
+  function movePhoto(id, dir) {
+    const i = state.photos.findIndex((p) => p.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= state.photos.length) return;
+    [state.photos[i], state.photos[j]] = [state.photos[j], state.photos[i]];
+    renderAll();
+  }
+  function removePhoto(id) {
+    const i = state.photos.findIndex((p) => p.id === id);
+    if (i < 0) return;
+    URL.revokeObjectURL(state.photos[i].url);
+    state.photos.splice(i, 1);
+    renderAll();
+  }
+
+  function renderPhotoList() {
+    photoCountEl.textContent = state.photos.length ? `(${state.photos.length}枚)` : '';
+    if (!state.photos.length) {
+      photoListEl.innerHTML = '<li class="empty-msg">まだ写真がありません。<br>上の「写真を選ぶ」または<br>ドラッグ&ドロップで追加してください。</li>';
+      return;
+    }
+    photoListEl.innerHTML = '';
+    state.photos.forEach((p, i) => {
+      const li = document.createElement('li');
+      li.className = 'photo-row';
+      const rot = p.error ? 0 : effectiveRotation(p);
+      const thumbSrc = (!p.error && rot) ? rotatedPreviewUrl(p, rot) : p.url;
+      const thumbHtml = p.error
+        ? `<div class="thumb broken">読込不可</div>`
+        : `<img class="thumb" src="${thumbSrc}" alt="">`;
+      const rotLabel = rot ? `<span class="rotlabel">${rot}°${p.rotOverride != null ? '' : '(自動)'}</span>` : '';
+      li.innerHTML = `
+        <span class="num">${i + 1}</span>
+        ${thumbHtml}
+        <span class="nameWrap">
+          <span class="name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</span>
+          ${rotLabel}
+        </span>
+        <span class="rowbtns">
+          <button type="button" class="btn icon" data-act="rot" aria-label="90度回転">⟳</button>
+          <button type="button" class="btn icon" data-act="up" ${i === 0 ? 'disabled' : ''} aria-label="上へ">▲</button>
+          <button type="button" class="btn icon" data-act="down" ${i === state.photos.length - 1 ? 'disabled' : ''} aria-label="下へ">▼</button>
+          <button type="button" class="btn icon" data-act="del" aria-label="削除">✕</button>
+        </span>`;
+      li.querySelector('[data-act="rot"]').addEventListener('click', () => rotatePhoto(p.id));
+      li.querySelector('[data-act="up"]').addEventListener('click', () => movePhoto(p.id, -1));
+      li.querySelector('[data-act="down"]').addEventListener('click', () => movePhoto(p.id, 1));
+      li.querySelector('[data-act="del"]').addEventListener('click', () => removePhoto(p.id));
+      photoListEl.appendChild(li);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function usablePhotos() { return state.photos.filter((p) => !p.error); }
+
+  // ---- 向き(縦横)の自動補正 ----
+  // 用紙が縦のときは升目も縦長、横のときは横長になる(枚数によらずほぼこの比率)。
+  // 写真の向きが升目の向きと逆(スマホを横に持って撮った写真を縦長の升目に入れる、など)なら90度回して合わせる。
+  function cellIsPortrait() { return state.ori !== 'l'; }
+  function autoRotationDeg(photo) {
+    if (!photo.w || !photo.h) return 0;
+    const photoIsLandscape = photo.w > photo.h;
+    const portrait = cellIsPortrait();
+    if (portrait && photoIsLandscape) return 90;
+    if (!portrait && !photoIsLandscape) return 90;
+    return 0;
+  }
+  function effectiveRotation(photo) {
+    return photo.rotOverride != null ? photo.rotOverride : autoRotationDeg(photo);
+  }
+  function rotatePhoto(id) {
+    const p = state.photos.find((x) => x.id === id);
+    if (!p) return;
+    p.rotOverride = (effectiveRotation(p) + 90) % 360;
+    renderAll();
+  }
+  // deg度回転させ、長辺が maxDim を超えないように縮小したJPEGを作る(0度でも通してよい共通処理)
+  function rotatedBoundedJpeg(img, deg, maxDim, quality) {
+    const swapped = deg === 90 || deg === 270;
+    const origW = img.naturalWidth, origH = img.naturalHeight;
+    let postW = swapped ? origH : origW;
+    let postH = swapped ? origW : origH;
+    if (postW > maxDim || postH > maxDim) {
+      const s = maxDim / Math.max(postW, postH);
+      postW = Math.round(postW * s); postH = Math.round(postH * s);
+    }
+    const scale = postW / (swapped ? origH : origW);
+    const preW = origW * scale, preH = origH * scale;
+    const canvas = document.createElement('canvas');
+    canvas.width = postW; canvas.height = postH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, postW, postH);
+    ctx.save();
+    ctx.translate(postW / 2, postH / 2);
+    ctx.rotate(deg * Math.PI / 180);
+    ctx.drawImage(img, -preW / 2, -preH / 2, preW, preH);
+    ctx.restore();
+    return { dataUrl: canvas.toDataURL('image/jpeg', quality), w: postW, h: postH };
+  }
+
+  const PREVIEW_MAXDIM = 900;
+  function rotatedPreviewUrl(photo, deg) {
+    if (!photo.img) return photo.url;
+    if (photo._prevCache && photo._prevCache.deg === deg) return photo._prevCache.url;
+    const { dataUrl } = rotatedBoundedJpeg(photo.img, deg, PREVIEW_MAXDIM, 0.85);
+    photo._prevCache = { deg, url: dataUrl };
+    return dataUrl;
+  }
+
+  function updateSummary() {
+    const n = usablePhotos().length;
+    const pages = n ? Math.ceil(n / state.grid) : 0;
+    const brokenN = state.photos.length - n;
+    summaryEl.innerHTML = n
+      ? `写真 <b>${n}枚</b> ・ <b>${state.grid}分割</b> → <b>${pages}ページ</b>のPDF${brokenN ? `<br><span style="color:var(--danger)">${brokenN}枚は読み込めないため除外されます</span>` : ''}`
+      : '写真を追加すると、ここにページ数が表示されます。';
+    btnExport.disabled = state.exporting || n === 0;
+  }
+
+  // ---- プレビュー ----
+  function chunk(arr, size) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  }
+
+  function placeholderCellSvg() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 16l-5.5-5.5L11 15l-3-3L3 17"/></svg>`;
+  }
+
+  function renderPreview() {
+    const cols = state.grid === 9 ? 3 : 2;
+    const photos = usablePhotos();
+    previewEl.innerHTML = '';
+    if (!photos.length) {
+      const note = document.createElement('p');
+      note.className = 'preview-empty-note';
+      note.textContent = `※ これは例です。写真を追加すると、実際の写真が${state.grid}分割で並びます。`;
+      const sheet = buildSheetEl(Array.from({ length: state.grid }, () => null), cols, true);
+      previewEl.appendChild(sheet);
+      previewEl.appendChild(note);
+      return;
+    }
+    const pages = chunk(photos, state.grid);
+    pages.forEach((pagePhotos, pi) => {
+      const label = document.createElement('div');
+      label.className = 'sheet-label';
+      label.textContent = `${pi + 1} / ${pages.length} ページ`;
+      previewEl.appendChild(label);
+      previewEl.appendChild(buildSheetEl(pagePhotos, cols, false));
+    });
+  }
+
+  function buildSheetEl(items, cols, isPlaceholder) {
+    const sheet = document.createElement('div');
+    sheet.className = `sheet ${state.ori} g${state.grid}`;
+    items.forEach((p) => {
+      const cell = document.createElement('div');
+      if (!p) {
+        cell.className = 'cell placeholder';
+        cell.innerHTML = placeholderCellSvg() + '<span>サンプル</span>';
+      } else {
+        cell.className = 'cell';
+        const img = document.createElement('img');
+        const rot = effectiveRotation(p);
+        img.src = rot ? rotatedPreviewUrl(p, rot) : p.url;
+        img.alt = '';
+        cell.appendChild(img);
+        if (state.caption) {
+          const cap = document.createElement('span');
+          cap.className = 'cap'; cap.textContent = p.name;
+          cell.appendChild(cap);
+        }
+      }
+      sheet.appendChild(cell);
+    });
+    return sheet;
+  }
+
+  function renderAll() { renderPhotoList(); renderPreview(); updateSummary(); }
+  renderAll();
+
+  // ---- PDF書き出し ----
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  function buildFilename() {
+    const d = new Date();
+    const p2 = (n) => String(n).padStart(2, '0');
+    return `現場写真_${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}_${state.grid}分割.pdf`;
+  }
+
+  // 通常のブラウザのダウンロードとして保存する(a[download] + Blob URL)
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  async function exportPdf() {
+    const photos = usablePhotos();
+    if (!photos.length || state.exporting) return;
+    state.exporting = true; btnExport.disabled = true;
+    statusEl.className = 'status'; statusEl.textContent = 'PDFを作成しています…(0%)';
+    try {
+      const { jsPDF } = window.jspdf || {};
+      if (!jsPDF) throw new Error('PDF作成の部品を読み込めませんでした。回線を確認してもう一度お試しください。');
+      const orientation = state.ori === 'l' ? 'l' : 'p';
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation });
+      const pageW = orientation === 'l' ? 297 : 210;
+      const pageH = orientation === 'l' ? 210 : 297;
+      const cols = state.grid === 9 ? 3 : 2;
+      const rows = cols;
+      const margin = 10, gap = 4;
+      const capH = state.caption ? 5 : 0;
+      const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
+      const cellH = (pageH - margin * 2 - gap * (rows - 1)) / rows;
+
+      const pages = chunk(photos, state.grid);
+      let done = 0;
+      for (let pi = 0; pi < pages.length; pi++) {
+        if (pi > 0) doc.addPage('a4', orientation);
+        const group = pages[pi];
+        for (let ci = 0; ci < group.length; ci++) {
+          const p = group[ci];
+          const col = ci % cols, row = Math.floor(ci / cols);
+          const x = margin + col * (cellW + gap);
+          const y = margin + row * (cellH + gap);
+          try {
+            const img = p.img || await loadImage(p.url);
+            if (!p.w) { p.w = img.naturalWidth; p.h = img.naturalHeight; }
+            const rot = effectiveRotation(p);
+            const { dataUrl, w: bw, h: bh } = rotatedBoundedJpeg(img, rot, 1600, 0.85);
+            const availH = cellH - capH;
+            const scale = Math.min(cellW / bw, availH / bh);
+            const dw = bw * scale, dh = bh * scale;
+            const dx = x + (cellW - dw) / 2, dy = y + (availH - dh) / 2;
+            doc.addImage(dataUrl, 'JPEG', dx, dy, dw, dh);
+            if (state.caption) {
+              doc.setFontSize(7.5); doc.setTextColor(110);
+              const label = p.name.length > 34 ? p.name.slice(0, 33) + '…' : p.name;
+              doc.text(label, x + cellW / 2, y + cellH - 1.3, { align: 'center' });
+            }
+          } catch (e) { /* このマスだけ空欄にして続行 */ }
+          done++;
+          statusEl.textContent = `PDFを作成しています…(${Math.round(done / photos.length * 100)}%)`;
+          await new Promise((r) => setTimeout(r, 0));
+        }
+        doc.setFontSize(8); doc.setTextColor(160);
+        doc.text(`${pi + 1} / ${pages.length}`, pageW - margin, pageH - 4, { align: 'right' });
+      }
+
+      const blob = doc.output('blob');
+      saveBlob(blob, buildFilename());
+      statusEl.className = 'status ok';
+      statusEl.textContent = 'PDFを保存しました(ブラウザのダウンロードフォルダを確認してください)。';
+    } catch (err) {
+      statusEl.className = 'status err';
+      statusEl.textContent = `作成できませんでした:${(err && err.message) || err}`;
+    } finally {
+      state.exporting = false; updateSummary();
+    }
+  }
+  btnExport.addEventListener('click', exportPdf);
+})();
+</script>
+</body>
+</html>
