@@ -70,9 +70,14 @@
   .btn:hover { border-color: var(--accent); }
   .btn.ghost { background: transparent; }
   .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  .btn.primary:disabled { opacity: .45; cursor: not-allowed; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
   .btn.big { width: 100%; padding: 11px 14px; font-size: 14px; }
   .btn.icon { padding: 4px 7px; font-size: 12px; line-height: 1; }
+  .btn.tiny { padding: 3px 9px; font-size: 11.5px; }
+  .btnrow { display: flex; flex-direction: column; gap: 8px; }
+
+  .blockhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .blockhead h2 { margin: 0; }
 
   .seg { display: flex; border: 1px solid var(--line2); border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
   .segbtn {
@@ -129,6 +134,17 @@
   .preview-empty-note {
     font-size: 12.5px; color: var(--ink2); text-align: center; max-width: 440px; line-height: 1.7;
   }
+
+  #printArea { display: none; }
+  @media print {
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: block !important; }
+    #printArea .sheet {
+      width: 100%; max-width: none; margin: 0 auto 0; box-shadow: none;
+      border: none; border-radius: 0; page-break-after: always;
+    }
+    #printArea .sheet:last-child { page-break-after: auto; }
+  }
 </style>
 </head>
 <body>
@@ -168,13 +184,19 @@
       </section>
 
       <section class="block grow">
-        <h2>写真リスト <span class="count" id="photoCount"></span></h2>
+        <div class="blockhead">
+          <h2>写真リスト <span class="count" id="photoCount"></span></h2>
+          <button type="button" class="btn ghost tiny" id="btnClearAll" disabled>全て削除</button>
+        </div>
         <ol class="photolist" id="photoList"></ol>
       </section>
 
       <section class="block">
         <div class="summary" id="summary"></div>
-        <button type="button" class="btn primary big" id="btnExport" disabled>PDFに書き出す</button>
+        <div class="btnrow">
+          <button type="button" class="btn primary big" id="btnExport" disabled>PDFに書き出す</button>
+          <button type="button" class="btn big" id="btnPrint" disabled>印刷する</button>
+        </div>
         <p class="status" id="exportStatus" role="status"></p>
       </section>
     </aside>
@@ -198,6 +220,8 @@
   const previewEl = $('#preview');
   const summaryEl = $('#summary');
   const btnExport = $('#btnExport');
+  const btnPrint = $('#btnPrint');
+  const btnClearAll = $('#btnClearAll');
   const statusEl = $('#exportStatus');
   const chkCaption = $('#chkCaption');
 
@@ -275,7 +299,10 @@
     updateSummary();
   }
   const segGrid = $('#segGrid'), segOri = $('#segOri');
-  segGrid.addEventListener('click', (e) => { const b = e.target.closest('.segbtn'); if (b) setSeg(segGrid, b.dataset.v === '9' ? '9' : '4', 'grid'); });
+  // grid は必ず数値(4 / 9)で保持する。文字列'9'のままだと「9 === 9」の判定や
+  // chunk() の足し算(i += size)が文字列結合になってしまい、9分割に切り替えたときに
+  // ページの写真の振り分けが壊れる(バグって見える)ため、ここで数値に変換する。
+  segGrid.addEventListener('click', (e) => { const b = e.target.closest('.segbtn'); if (b) setSeg(segGrid, b.dataset.v === '9' ? 9 : 4, 'grid'); });
   segOri.addEventListener('click', (e) => { const b = e.target.closest('.segbtn'); if (b) setSeg(segOri, b.dataset.v === 'l' ? 'l' : 'p', 'ori'); });
   state.grid = 4; state.ori = 'p';
   segGrid.querySelector('[data-v="4"]').setAttribute('aria-pressed', 'true');
@@ -297,9 +324,17 @@
     state.photos.splice(i, 1);
     renderAll();
   }
+  function removeAllPhotos() {
+    if (!state.photos.length) return;
+    state.photos.forEach((p) => URL.revokeObjectURL(p.url));
+    state.photos = [];
+    renderAll();
+  }
+  btnClearAll.addEventListener('click', removeAllPhotos);
 
   function renderPhotoList() {
     photoCountEl.textContent = state.photos.length ? `(${state.photos.length}枚)` : '';
+    btnClearAll.disabled = !state.photos.length;
     if (!state.photos.length) {
       photoListEl.innerHTML = '<li class="empty-msg">まだ写真がありません。<br>上の「写真を選ぶ」または<br>ドラッグ&ドロップで追加してください。</li>';
       return;
@@ -404,6 +439,7 @@
       ? `写真 <b>${n}枚</b> ・ <b>${state.grid}分割</b> → <b>${pages}ページ</b>のPDF${brokenN ? `<br><span style="color:var(--danger)">${brokenN}枚は読み込めないため除外されます</span>` : ''}`
       : '写真を追加すると、ここにページ数が表示されます。';
     btnExport.disabled = state.exporting || n === 0;
+    btnPrint.disabled = state.exporting || n === 0;
   }
 
   // ---- プレビュー ----
@@ -561,6 +597,59 @@
     }
   }
   btnExport.addEventListener('click', exportPdf);
+
+  // ---- 印刷 ----
+  // 印刷ダイアログの用紙の向きを、選んでいる縦/横に合わせておく(効くブラウザでは向きが自動で選ばれる)
+  function ensurePrintPageStyle() {
+    let styleEl = document.getElementById('printPageStyle');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'printPageStyle';
+      document.head.appendChild(styleEl);
+    }
+    const orientWord = state.ori === 'l' ? 'landscape' : 'portrait';
+    styleEl.textContent = `@page { size: A4 ${orientWord}; margin: 8mm; }`;
+  }
+
+  // 印刷専用の高解像度な用紙を、画面には出さずに body 内に一時的に作る
+  function buildPrintArea() {
+    const area = document.createElement('div');
+    area.id = 'printArea';
+    const photos = usablePhotos();
+    const pages = chunk(photos, state.grid);
+    pages.forEach((pagePhotos) => {
+      const sheet = document.createElement('div');
+      sheet.className = `sheet ${state.ori} g${state.grid}`;
+      pagePhotos.forEach((p) => {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const img = document.createElement('img');
+        const rot = effectiveRotation(p);
+        img.src = p.img ? rotatedBoundedJpeg(p.img, rot, 1600, 0.9).dataUrl : (rot ? rotatedPreviewUrl(p, rot) : p.url);
+        img.alt = '';
+        cell.appendChild(img);
+        if (state.caption) {
+          const cap = document.createElement('span');
+          cap.className = 'cap'; cap.textContent = p.name;
+          cell.appendChild(cap);
+        }
+        sheet.appendChild(cell);
+      });
+      area.appendChild(sheet);
+    });
+    return area;
+  }
+
+  function printAll() {
+    const photos = usablePhotos();
+    if (!photos.length || state.exporting) return;
+    ensurePrintPageStyle();
+    const area = buildPrintArea();
+    document.body.appendChild(area);
+    window.print();
+    area.remove();
+  }
+  btnPrint.addEventListener('click', printAll);
 })();
 </script>
 </body>
